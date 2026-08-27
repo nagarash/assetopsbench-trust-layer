@@ -15,7 +15,6 @@ from .models import AgentResult
 # ``self._server_paths`` (defaulting to this dict when ``server_paths=None``).
 DEFAULT_SERVER_PATHS: dict[str, Path | str] = {
     "iot": "iot-mcp-server",
-    "utilities": "utilities-mcp-server",
     "fmsr": "fmsr-mcp-server",
     "tsfm": "tsfm-mcp-server",
     "wo": "wo-mcp-server",

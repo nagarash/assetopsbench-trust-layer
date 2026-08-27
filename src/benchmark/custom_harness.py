@@ -18,7 +18,7 @@ Usage:
 
     uv run run-scenario-checks \\
         --scenarios assetopsbench-data/data/asset/compressor_utterance.jsonl \\
-        --runner plan-execute \\
+        --runner simple-agent \\
         --model-id litellm_proxy/openai/gpt-4o-mini \\
         --limit 5
 
@@ -135,8 +135,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--runner",
-        default="plan-execute",
-        help="Agent runner CLI to invoke (default: plan-execute).",
+        default="simple-agent",
+        help="Agent runner CLI to invoke (default: simple-agent).",
     )
     parser.add_argument(
         "--model-id",
