@@ -1,14 +1,13 @@
 # AssetOpsBench — Trust Layer
 
-A private research fork of [IBM/AssetOpsBench](https://github.com/IBM/AssetOpsBench)
+A research fork of [IBM/AssetOpsBench](https://github.com/IBM/AssetOpsBench)
 (the original upstream README is preserved at [`docs/UPSTREAM_README.md`](docs/UPSTREAM_README.md)).
-This repo keeps the parts of the framework this project actually uses — the domain MCP
-servers, the MCP client, and the evaluation subsystem — and adds a deterministic **trust
+This repo keeps the parts of the framework such as the domain MCP
+servers, the MCP client, and the evaluation subsystem. It adds a deterministic **trust
 layer**: post-hoc checks that score a finished agent trajectory without an LLM judge,
 and in-loop verifiers that inspect tool calls as they happen and correct the agent
 mid-run.
 
-**Full write-up:** [`reports/trust-vs-outcome.pdf`](reports/trust-vs-outcome.pdf)
 
 ## Results at a glance
 
