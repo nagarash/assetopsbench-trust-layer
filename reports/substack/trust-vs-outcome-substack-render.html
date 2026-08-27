@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Copy this into Substack</title>
+<style>
+  body { max-width: 720px; margin: 40px auto; padding: 0 20px; font-family: Georgia, 'Times New Roman', serif; font-size: 18px; line-height: 1.6; color: #111; }
+  h1 { font-size: 32px; line-height: 1.2; }
+  h2 { font-size: 24px; margin-top: 40px; }
+  h3 { font-size: 20px; margin-top: 32px; }
+  p { margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 15px; }
+  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+  th { background: #f2f2f2; }
+  blockquote { border-left: 3px solid #999; margin: 20px 0; padding: 4px 16px; color: #333; }
+  code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+  .eyebrow { color: #666; font-style: italic; }
+  .meta { color: #666; font-size: 14px; }
+  .imagemark { display: block; background: #fff3cd; border: 2px dashed #d9a300; padding: 14px; margin: 24px 0; font-weight: bold; text-align: center; }
+  .instructions { background: #eef; border: 2px solid #669; padding: 16px 20px; margin-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<div class="instructions">
+  <strong>How to use this page:</strong> select all the content below (Cmd/Ctrl+A starting from the title), copy it, and paste directly into the Substack post editor. Because this is rendered HTML (not raw Markdown text), Substack will convert the headings, bold text, and blockquotes into its native formatting automatically. All tables have been rendered as images too, since Substack's paste handler does not reliably convert HTML tables. At each yellow "INSERT IMAGE" marker, delete the marker and use Substack's image block to upload the matching numbered PNG from this same folder — the numbers match the order they appear on this page.
+</div>
+
+<p class="eyebrow">Agent Evaluation &middot; AssetOpsBench &middot; Deterministic Trust Layers</p>
+
+<h1>Evaluating an Asset-Operations Agent: A Trust-Layer Blueprint on AssetOpsBench</h1>
+
+<p><strong>Abstract.</strong> AssetOpsBench, IBM Research's benchmark for industrial asset-operations agents, poses questions no single tool can answer alone. An agent must retrieve sensor telemetry, identify known failure modes, run a forecasting or anomaly-detection model, and decide whether a work order is warranted. That means coordinating across five MCP tool servers. This report builds a two-layer deterministic trust layer for a small model. The process was iterative: post-hoc checks exposed specific, recurring failure modes in the agent's trajectories. Each one was addressed with a targeted in-loop verifier, then re-measured before moving to the next. This is a hill-climbing process. The result is evaluated against GLM-4.6 and Claude Sonnet 4.5 on the same scenarios. The small model plus trust layer lands within 9 points of a frontier model's success rate, at roughly 1/31st the cost.</p>
+
+<p class="meta">August 2026 &middot; gpt-4o-mini, GLM-4.6, and Claude Sonnet 4.5, all via OpenRouter &middot; three evaluation runs: 10 + 16 + 12 scenarios</p>
+
+<span class="imagemark">INSERT IMAGE: 01-hero-stats.png</span>
+
+<h2>The Challenge</h2>
+
+<p>Running a small open-weight model against AssetOpsBench surfaced three recurring failure modes. Each one is invisible to a check that asks only whether a tool call succeeded.</p>
+
+<ul>
+  <li><strong>Structural success, semantic failure.</strong> A trajectory with zero tool errors and fully schema-valid arguments still produced an incorrect answer on a meaningful share of hand-graded runs. Every call succeeded. Some arguments were simply wrong for the asset in question.</li>
+  <li><strong>Silent category skipping.</strong> When a question implied that work orders should be checked, the baseline agent invoked the work-order tool in only 6% of cases (1 of 16 scenarios). It still answered confidently, without making the call a correct answer required.</li>
+  <li><strong>Unproductive retries.</strong> An empty result from a model-catalog lookup was treated as ambiguous rather than definitive. The agent retried the same search with different parameters instead of concluding that no model existed for the task. This consumed turns needed elsewhere in the trajectory.</li>
+</ul>
+
+<h2>The Solution</h2>
+
+<p>Two layers of deterministic logic wrap the same underlying model. Neither is itself an LLM call. <strong>Post-hoc checks</strong> score a completed trajectory. This is useful for reporting, but it happens too late to affect the run being scored. <strong>In-loop verifiers</strong> inspect each tool call as it occurs. When a call appears ungrounded, a verifier injects a corrective observation into the conversation. This is the same mechanism the agent loop already uses to surface tool errors, extended here to answers that are wrong without being invalid. A third mechanism, a pre-finalization gate, prevents the agent from accepting its own answer as final. It blocks until every tool category implied by the question has actually been used.</p>
+
+<p>The two layers were built in that order. The second exists because of the first. Post-hoc checks ran against real trajectories before any in-loop mechanism existed. Each recurring failure they exposed was diagnosed individually: a silently skipped tool category, a wrong argument value, an unproductive retry loop. Each one was then addressed with a narrowly targeted verifier before moving to the next. This is a hill-climbing process. Take the smallest step that reduces an observed failure. Re-measure with the same post-hoc checks. Repeat. The risk is overfitting to exactly the failures already seen. That is why every new check and verifier described below was validated against a scenario set broader than the case that motivated it, not just the one that surfaced the problem.</p>
+
+<h2>How the Agent Works</h2>
+
+<p>Each scenario runs through a single ReAct-style loop: one model, one shared conversation thread. There is no hand-off between separate per-category agents. The tool catalog is scoped to the servers a given scenario requires. The example below traces one real scenario end to end. The trust layer's two checks are shown as a separate lane beneath the main flow, connected at the points where they fire.</p>
+
+<span class="imagemark">INSERT IMAGE: 02-server-table.png</span>
+
+<span class="imagemark">INSERT IMAGE: 03-workflow-diagram.png</span>
+
+<p><em>Scenario walkthrough, id 1001: "Consider asset mp_1 &hellip; is there a risk of an air leak failure occurring within the next 7 days? Should we schedule maintenance?" &mdash; tool order simplified, retries omitted.</em></p>
+
+<h2>The Trust Layer: Two Kinds of Deterministic Checks</h2>
+
+<p>Every check described below is implemented as plain code, not a second model call. Each is inexpensive to run and unambiguous to interpret. Each either scores a run after completion, or acts on it while still in progress.</p>
+
+<p><strong>Post-hoc checks &mdash; score a completed trajectory, no model call involved</strong></p>
+
+<span class="imagemark">INSERT IMAGE: 04-post-hoc-checks-table.png</span>
+
+<p><strong>In-loop verifiers &mdash; fire during the run, can change its outcome</strong></p>
+
+<span class="imagemark">INSERT IMAGE: 05-in-loop-verifiers-table.png</span>
+
+<p>A third, smaller mechanism operates alongside these two. Client-side JSON-schema enrichment adds structure to tool parameters that the servers themselves expose only loosely. This gives the model a concrete shape to populate at the moment it builds a call, instead of requiring it to separately consult prose documentation.</p>
+
+<h2>Evaluation Setup</h2>
+
+<p>Three evaluation runs underlie the results below. Each draws real AssetOpsBench question text &mdash; no invented questions. Scenarios were selected in id order within each set, with no cherry-picking.</p>
+
+<span class="imagemark">INSERT IMAGE: 06-evaluation-setup-table.png</span>
+
+<p>Collectively, these scenarios span three assets: Chiller 6 at the MAIN site, compressor <code>mp_1</code>, and hydraulic pump <code>hp_1</code> (the real UCI hydraulic-systems sensor set). They ran against an environment seeded with the failure-mode, work-order, and sensor records those scenarios reference. Scenario ids overlap across studies. The <code>mp_1</code>/<code>hp_1</code> questions used in the cost/accuracy sample are drawn from the same pool as the baseline/trust-layer study. Read the three counts above as the size of each individual run, not as a sum toward a larger unique total.</p>
+
+<h2>Results and Impact</h2>
+
+<h3>Cost vs. accuracy: gpt-4o-mini, GLM-4.6, and Claude Sonnet 4.5</h3>
+
+<p>All three models were evaluated on the same 12-scenario sample. It spans IoT-only lookups, failure-mode diagnostics, time-series forecasting/anomaly detection, and full multi-tool predictive-maintenance questions across three assets. All three used the same trust-layer harness &mdash; prompt guidance plus enforced verifier gates &mdash; and the same deterministic checks. All three were accessed via OpenRouter.</p>
+
+<span class="imagemark">INSERT IMAGE: 07-cost-success-scatter.png</span>
+
+<span class="imagemark">INSERT IMAGE: 08-cost-accuracy-metrics-table.png</span>
+
+<blockquote><strong>The gap is not purely attributable to capability.</strong> All three models failed the same three scenarios in the same way. None of them ever invoked the work-order or vibration tools a given question implied &mdash; regardless of vendor or price tier. GLM-4.6 matched gpt-4o-mini's success rate exactly, at roughly six times the cost. It also introduced two distinct tool-execution errors that gpt-4o-mini did not hit on this sample. Claude Sonnet 4.5's one distinct failure differed in kind, not degree. It attempted a tool call against a server not registered for that scenario, producing a malformed call. gpt-4o-mini simply did not act on the same prompt cue. Sonnet's advantage on this sample reduces to a single scenario, where it used the work-order tool and the other two models did not.</blockquote>
+
+<h3>Structural checks vs. actual correctness</h3>
+
+<p>Ten scenarios with known ground truth were graded by hand. Structural checks &mdash; no silent tool failures, every tool argument schema-valid &mdash; passed on 100% of runs. Actual correctness against ground truth was <strong>80%</strong>. The in-loop verifiers described above detect semantically incorrect tool arguments, not only malformed ones. Adding them closed this gap, on the same model and scenarios.</p>
+
+<span class="imagemark">INSERT IMAGE: 09-structural-checks-bar.png</span>
+
+<h3>Baseline vs. trust layer: tool invocation rate</h3>
+
+<p>Sixteen predictive-maintenance scenarios were evaluated. The baseline condition is the agent without the trust layer. The trust-layer condition adds the targeted prompt instructions and the enforced pre-finalization gate described above.</p>
+
+<blockquote><strong>Work orders were the hardest category to close.</strong> Baseline tool use was 6% (1/16) for work orders, versus 19% for forecasting and 38% for failure-mode lookups. The trust layer more than triples work-order invocation, to 31%. That is the largest relative gain of the three categories.</blockquote>
+
+<span class="imagemark">INSERT IMAGE: 10-baseline-trust-bar.png</span>
+
+<span class="imagemark">INSERT IMAGE: 11-baseline-trust-table.png</span>
+
+<p>The hardest scenarios require <code>fmsr</code>, <code>iot</code>, <code>tsfm</code>, and <code>wo</code> to cooperate on a single answer. No single category is enough on its own. This is also why a multi-agent split &mdash; one agent per tool category &mdash; is a harder redesign than it first looks. It would need a router to select the right agents. It would need a supervisor to reconcile their outputs. And it would have to do both without breaking the cross-tool grounding checks described above, which depend on seeing every tool call within one shared trajectory.</p>
+
+<h2>Key Takeaways</h2>
+
+<ul>
+  <li><strong>A small model combined with a deterministic trust layer closes most of the gap to a frontier model, at a fraction of the cost.</strong> Success rates of 58% versus 67% on the same 12 scenarios were achieved at approximately 1/31st the price.</li>
+  <li><strong>Structural correctness and semantic correctness are distinct measurements.</strong> A trajectory can pass every schema and error check and still be incorrect 20% of the time; only checks that evaluate argument values against trajectory evidence detect this gap.</li>
+  <li><strong>An enforced gate outperforms guidance alone.</strong> Adding a hard block on finalization to the same prompt instruction moved work-order tool use from 6% to 31%. That more than tripled the hardest category to close.</li>
+  <li><strong>Most of the remaining gap is concentrated in multi-tool-category coordination, not raw model capability.</strong> All three models failed the same three scenarios in the same way. Each one needs four tool categories to cooperate on a single answer.</li>
+  <li><strong>This coordination requirement is also why a multi-agent split is not an obvious next step.</strong> The hardest scenarios require shared trajectory context across tool categories. A router-plus-supervisor architecture would need to explicitly reconstruct that context.</li>
+</ul>
+
+<h2>Conclusion</h2>
+
+<p>The central finding generalizes to any setting where agents are evaluated in production. A fluent answer does not mean the agent performed the correct actions. Passing structural tool-call checks does not mean the arguments inside those calls were correct. A two-layer trust layer closed most of this gap for a small, inexpensive model. Deterministic checks score a run; in-loop verifiers can alter one. Neither required the model itself to grow larger or more expensive.</p>
+
+<p>These results come from three evaluation runs, of 10, 16, and 12 scenarios. This is not an exhaustive benchmark. Read the percentages as directional, not final. Expect additional run-to-run variance from the models themselves. The datasets, checks, and verifiers described above are the reproducible part. The numbers are a snapshot from one run through them.</p>
+
+<hr>
+
+<p class="meta"><em>AssetOpsBench (IBM Research) &middot; gpt-4o-mini, GLM-4.6, and Claude Sonnet 4.5 via OpenRouter &middot; August 2026</em></p>
+
+</body>
+</html>

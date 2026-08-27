@@ -140,6 +140,24 @@ def _is_timezone_aware(value: datetime) -> bool:
     return value.utcoffset() is not None
 
 
+def _to_naive_utc(value: datetime) -> datetime:
+    """Normalize a datetime to naive UTC wall-clock time for comparison.
+
+    Telemetry timestamps in this store are naive and implicitly UTC. Bounds
+    supplied by a caller may or may not carry an explicit UTC offset — a
+    trailing ``Z`` (meaning "UTC") is the single most common shape an
+    LLM-driven caller produces, and it means the same instant as the bare
+    naive form once the store's own naive-UTC convention is accounted for.
+    Comparing by normalized instant instead of rejecting on a surface-level
+    awareness mismatch removes friction with no loss of correctness: an
+    aware value is converted to UTC and its offset dropped; a naive value is
+    assumed to already be UTC and passed through unchanged.
+    """
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 def _validate_dates(start: Optional[str], end: Optional[str]) -> Optional[str]:
     """Return None when the optional ISO 8601 bounds are valid."""
     start_dt = _parse_iso_timestamp(start) if start is not None else None
@@ -149,9 +167,7 @@ def _validate_dates(start: Optional[str], end: Optional[str]) -> Optional[str]:
     if end is not None and end_dt is None:
         return "Invalid date format for end (expected ISO 8601)"
     if start_dt is not None and end_dt is not None:
-        if _is_timezone_aware(start_dt) != _is_timezone_aware(end_dt):
-            return "start and end must use matching timezone awareness"
-        if start_dt >= end_dt:
+        if _to_naive_utc(start_dt) >= _to_naive_utc(end_dt):
             return "start >= end"
     return None
 
@@ -163,7 +179,15 @@ def _iter_records_in_window(
     end_dt: Optional[datetime],
     fields: Optional[List[str]] = None,
 ) -> Iterator[Tuple[Dict[str, Any], str, datetime]]:
-    """Yield timestamped records in a parsed half-open time window."""
+    """Yield timestamped records in a parsed half-open time window.
+
+    Bounds are compared against each record by normalized instant (see
+    :func:`_to_naive_utc`), so a bound's own awareness never needs to match
+    the stream's — only genuine cross-record inconsistency *within* the
+    stream itself is still treated as a data-quality error worth surfacing.
+    """
+    start_cmp = _to_naive_utc(start_dt) if start_dt is not None else None
+    end_cmp = _to_naive_utc(end_dt) if end_dt is not None else None
     stream_is_aware: Optional[bool] = None
     for doc in _iter_records(database, selector, fields=fields):
         timestamp = doc.get("timestamp")
@@ -178,23 +202,15 @@ def _iter_records_in_window(
         timestamp_is_aware = _is_timezone_aware(timestamp_dt)
         if stream_is_aware is None:
             stream_is_aware = timestamp_is_aware
-            for bound in (start_dt, end_dt):
-                if (
-                    bound is not None
-                    and _is_timezone_aware(bound) != stream_is_aware
-                ):
-                    raise _TimestampHandlingError(
-                        "timestamp bounds must use the same timezone awareness "
-                        "as telemetry timestamps"
-                    )
         elif timestamp_is_aware != stream_is_aware:
             raise _TimestampHandlingError(
                 "telemetry timestamps use mixed timezone awareness"
             )
 
-        if start_dt is not None and timestamp_dt < start_dt:
+        timestamp_cmp = _to_naive_utc(timestamp_dt)
+        if start_cmp is not None and timestamp_cmp < start_cmp:
             continue
-        if end_dt is not None and timestamp_dt >= end_dt:
+        if end_cmp is not None and timestamp_cmp >= end_cmp:
             continue
         yield doc, timestamp, timestamp_dt
 

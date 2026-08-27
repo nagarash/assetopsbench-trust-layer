@@ -204,3 +204,6 @@ src/tmp/
 
 # Observability artifacts (OTLP-JSON traces + per-run trajectory JSON).
 traces/
+
+# Claude Code local session/config directory — not part of the project.
+.claude/

@@ -686,9 +686,13 @@ class TestStreamExtent:
         assert selector["timestamp"] == {"$exists": True, "$ne": None}
 
     @pytest.mark.anyio
-    async def test_bounds_must_match_stream_timezone_awareness(
+    async def test_aware_bound_against_naive_stream_is_normalized_not_rejected(
         self, mock_asset_db, mock_iot_db
     ):
+        # A bound's own awareness no longer has to match the stream's — an
+        # LLM-driven caller reaching for a trailing "Z" (the single most
+        # common ISO 8601 shape) against this naive-UTC store used to be
+        # rejected outright; it's now normalized and compared by instant.
         mock_asset_db.find.return_value = {"docs": [{"siteid": "MAIN"}]}
         mock_iot_db.find.return_value = {
             "docs": [{"timestamp": "2024-01-01T00:00:00"}]
@@ -704,12 +708,56 @@ class TestStreamExtent:
             },
         )
 
-        assert data == {
-            "error": (
-                "timestamp bounds must use the same timezone awareness "
-                "as telemetry timestamps"
-            )
+        assert data["total_records"] == 1
+
+    @pytest.mark.anyio
+    async def test_naive_bound_against_aware_stream_is_normalized_not_rejected(
+        self, mock_asset_db, mock_iot_db
+    ):
+        mock_asset_db.find.return_value = {"docs": [{"siteid": "MAIN"}]}
+        mock_iot_db.find.return_value = {
+            "docs": [{"timestamp": "2024-01-01T00:00:00+00:00"}]
         }
+
+        data = await call_tool(
+            mcp,
+            "stream_extent",
+            {
+                "site_name": "MAIN",
+                "asset_id": "Pump-1",
+                "start": "2024-01-01T00:00:00",
+            },
+        )
+
+        assert data["total_records"] == 1
+
+    @pytest.mark.anyio
+    async def test_z_suffixed_bound_excludes_records_outside_the_window(
+        self, mock_asset_db, mock_iot_db
+    ):
+        # Normalization must still respect the window, not just avoid
+        # erroring — a "Z"-suffixed bound has to actually filter correctly
+        # against naive-UTC stream timestamps.
+        mock_asset_db.find.return_value = {"docs": [{"siteid": "MAIN"}]}
+        mock_iot_db.find.return_value = {
+            "docs": [
+                {"timestamp": "2023-12-31T23:00:00"},
+                {"timestamp": "2024-01-01T12:00:00"},
+            ]
+        }
+
+        data = await call_tool(
+            mcp,
+            "stream_extent",
+            {
+                "site_name": "MAIN",
+                "asset_id": "Pump-1",
+                "start": "2024-01-01T00:00:00Z",
+            },
+        )
+
+        assert data["total_records"] == 1
+        assert data["start_time"] == "2024-01-01T12:00:00"
 
     @pytest.mark.anyio
     async def test_compares_explicit_offsets_chronologically(

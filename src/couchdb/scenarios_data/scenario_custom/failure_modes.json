@@ -1,0 +1,98 @@
+[
+  {
+    "asset_class": "pump",
+    "failure_modes": [
+      "seal leakage",
+      "impeller wear"
+    ],
+    "source": "synthetic sample",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "chiller",
+    "failure_modes": [
+      "compressor overheating",
+      "evaporator water side fouling",
+      "condenser water side fouling",
+      "refrigerant leak",
+      "purge unit excessive purge"
+    ],
+    "source": "custom harness sample",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "compressor",
+    "failure_modes": [
+      "air leak",
+      "valve failure",
+      "bearing wear",
+      "motor overheating"
+    ],
+    "source": "custom harness sample",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "mp",
+    "failure_modes": [
+      "air leak",
+      "valve failure",
+      "bearing wear",
+      "motor overheating"
+    ],
+    "source": "custom harness sample (alias for compressor)",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "hydraulic pump",
+    "failure_modes": [
+      "valve degradation",
+      "pressure loss",
+      "seal leakage",
+      "pump cavitation"
+    ],
+    "source": "custom harness sample",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "hyd",
+    "failure_modes": [
+      "valve degradation",
+      "pressure loss",
+      "seal leakage",
+      "pump cavitation"
+    ],
+    "source": "custom harness sample (alias for hydraulic pump)",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "hp",
+    "failure_modes": [
+      "valve degradation",
+      "pressure loss",
+      "seal leakage",
+      "pump cavitation"
+    ],
+    "source": "custom harness sample (alias for hydraulic pump)",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "motor",
+    "failure_modes": [
+      "bearing failure",
+      "winding insulation breakdown",
+      "rotor imbalance"
+    ],
+    "source": "custom harness sample",
+    "exhaustive": false
+  },
+  {
+    "asset_class": "ahu",
+    "failure_modes": [
+      "filter clogging",
+      "fan motor failure",
+      "damper actuator failure"
+    ],
+    "source": "custom harness sample",
+    "exhaustive": false
+  }
+]

@@ -24,7 +24,13 @@ _PRICE_PER_1M: dict[str, tuple[float, float]] = {
     "minimax-m3": (0.3, 1.2),
     "gpt-4.1": (3.0, 12.0),
     "gpt-4o": (2.5, 10.0),
+    "gpt-4o-mini": (0.15, 0.60),
+    # Anthropic's standard (non-Opus) tier price, unchanged since launch —
+    # same rate as claude-sonnet-4-6 above.
+    "claude-sonnet-4.5": (3.0, 15.0),
     "llama-4-maverick": (0.27, 0.85),
+    # Live OpenRouter listed price as of 2026-08-26 (z-ai/glm-4.6).
+    "glm-4.6": (0.50, 2.00),
 }
 
 
