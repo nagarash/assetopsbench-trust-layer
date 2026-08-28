@@ -185,6 +185,13 @@ keep the repo focused on the trust-layer work above:
 `upstream` still points at `github.com/IBM/AssetOpsBench` if you want to diff against or
 pull from the original.
 
+## Full write-up
+
+The commands above reproduce the numbers; the methodology behind them — the failure
+modes each check targets, how every check was validated against a scenario set broader
+than the case that motivated it, and the full per-model breakdown — is in
+[`reports/trust-vs-outcome.pdf`](reports/trust-vs-outcome.pdf).
+
 ## License
 
 Apache 2.0, inherited from the upstream project — see [`LICENSE`](LICENSE).
